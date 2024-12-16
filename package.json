@@ -12,6 +12,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@mtproto/core": "6.3.0",
+    "telegram": "^2.26.8",
     "vite": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.2"
   }
 }
