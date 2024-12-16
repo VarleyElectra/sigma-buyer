@@ -78,6 +78,7 @@ const auth = async () => {
           phone,
           phone_code_hash,
         });
+        console.log('Требуется регистрация.');
       }
     } catch (error) {
       if (error.error_message !== 'SESSION_PASSWORD_NEEDED') {
@@ -103,6 +104,7 @@ const auth = async () => {
       const checkPasswordResult = await checkPassword({ srp_id, A, M1 });
     }
   }
+  console.log('Авторизация успешна!');
 };
 
 

@@ -1,53 +1,112 @@
 const api = require('./telegram-api/api');
 const auth = require('./telegram-api/auth');
 const fs = require('fs');
+const { callsFilantrop, callsMadApes } = require('./telegram-api/channelsData');
 
+// Функция для получения информации о канале по username
+async function getChannelByUsername(username) {
+  try {
+    const result = await api.call('contacts.resolveUsername', {
+      username,
+    });
+    console.log('Информация о канале:', result);
+    return result;
+  } catch (error) {
+    console.error('Ошибка получения информации о канале:', error);
+  }
+}
 
-// Получение чатов
-(async () => {
-  await auth();
+// Функция для получения списка чатов
+async function getChats() {
+  try {
+    const dialogs = await api.call('messages.getDialogs', {
+      offset_peer: { _: 'inputPeerEmpty' },
+    });
 
-  const chatsResp = await api.call('messages.getPinnedDialogs', {
+    const channels = dialogs.chats.filter(chat => chat._ === 'channel');
 
-  });
+    console.log('Ваши каналы:');
+    channels.forEach(channel => {
+      console.log(`- Название: ${channel.title}`);
+      console.log(`  ID: ${channel.id}`);
+      console.log(`  Access Hash: ${channel.access_hash || 'Нет доступа'}`);
+      console.log('---');
+    });
 
-  console.log(chatsResp);
+    return channels;
+  } catch (error) {
+    console.error('Ошибка получения списка чатов:', error);
+  }
+}
 
-})()
+// Функция для получения сообщений из канала
+async function getMessagesFromChannel(channelData) {
+  try {
+    const inputPeer = {
+      _: 'inputPeerChannel',
+      access_hash: channelData.access_hash,
+      channel_id: channelData.id,
+    };
 
+    const LIMIT_COUNT = 10;
+    const allMessages = [];
 
-// Получение сообщений
-// (async () => {
-//
-//   await auth();
-//
-//   const inputPeer = {
-//     _: 'inputPeerChannel',
-//     access_hash: '17906011120624565020',
-//     channel_id: '1656091863'
-//   }
-//
-//   const LIMIT_COUNT = 10;
-//   const allMessages = [];
-//
-//   const firstHistoryResult = await api.call('messages.getHistory', {
-//     peer: inputPeer,
-//     limit: LIMIT_COUNT
-//   });
-//
-//   const historyCount = firstHistoryResult.count;
-//
-//   for(let offset = 0; offset < historyCount; offset += LIMIT_COUNT) {
-//     console.log('offset', offset);
-//     const history = await api.call('messages.getHistory', {
-//       peer: inputPeer,
-//       limit: LIMIT_COUNT,
-//       add_offset: offset
-//     });
-//
-//     allMessages.push(...history.messages);
-//   }
-//
-//   fs.writeFileSync('mess.json', JSON.stringify(allMessages));
-//
-// })();
+    const firstHistoryResult = await api.call('messages.getHistory', {
+      peer: inputPeer,
+      limit: LIMIT_COUNT,
+    });
+
+    console.log('firstHistoryResult', firstHistoryResult)
+
+    const messages = firstHistoryResult.messages
+      .filter(message => message.message) // Оставляем только сообщения с текстом
+      .map(message => message.message); // Извлекаем текст сообщений
+
+    console.log('Текстовые сообщения из канала:', messages);
+    // console.log('Первая часть истории:', firstHistoryResult);
+
+    const historyCount = firstHistoryResult.count;
+
+    // Если хотите загрузить все сообщения, раскомментируйте цикл
+    // for (let offset = 0; offset < historyCount; offset += LIMIT_COUNT) {
+    //   const history = await api.call('messages.getHistory', {
+    //     peer: inputPeer,
+    //     limit: LIMIT_COUNT,
+    //     add_offset: offset,
+    //   });
+    //   allMessages.push(...history.messages);
+    // }
+
+    const result = JSON.stringify(allMessages);
+    console.log('Все сообщения:', result);
+
+    // Если хотите сохранить в файл, раскомментируйте следующую строку
+    // fs.writeFileSync('messages.json', JSON.stringify(allMessages));
+
+    return allMessages;
+  } catch (error) {
+    console.error('Ошибка получения сообщений из канала:', error);
+  }
+}
+
+// Основная функция запуска
+async function main() {
+  try {
+    console.log('Авторизация...');
+    await auth();
+
+    console.log('Получение информации о канале FILANTROP_GAMBLE...');
+    await getChannelByUsername('FILANTROP_GAMBLE');
+
+    console.log('Получение списка чатов...');
+    await getChats();
+
+    console.log('Получение сообщений из канала callsMadApes...');
+    await getMessagesFromChannel(callsMadApes);
+  } catch (error) {
+    console.error('Ошибка выполнения программы:', error);
+  }
+}
+
+// Запуск программы
+main();
