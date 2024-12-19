@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "@mtproto/core": "6.3.0",
+    "input": "^1.0.1",
     "telegram": "^2.26.8",
     "vite": "^6.0.3"
   },

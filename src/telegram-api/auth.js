@@ -2,8 +2,6 @@ const api = require('./api');
 const config = require('./config');
 const {code, phone, password} = config;
 
-
-
 async function getUser() {
   try {
     const user = await api.call('users.getFullUser', {

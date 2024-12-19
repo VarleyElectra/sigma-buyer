@@ -1,7 +1,8 @@
 const api = require('./telegram-api/api');
 const auth = require('./telegram-api/auth');
 const fs = require('fs');
-const { callsFilantrop, callsMadApes } = require('./telegram-api/channelsData');
+const { callsFilantrop, callsMadApes, spyDefi } = require('./telegram-api/channelsData');
+const {findSolanaAddresses} = require("./utils");
 
 // Функция для получения информации о канале по username
 async function getChannelByUsername(username) {
@@ -48,7 +49,7 @@ async function getMessagesFromChannel(channelData) {
       channel_id: channelData.id,
     };
 
-    const LIMIT_COUNT = 10;
+    const LIMIT_COUNT = 50;
     const allMessages = [];
 
     const firstHistoryResult = await api.call('messages.getHistory', {
@@ -56,11 +57,18 @@ async function getMessagesFromChannel(channelData) {
       limit: LIMIT_COUNT,
     });
 
-    console.log('firstHistoryResult', firstHistoryResult)
+    // console.log('firstHistoryResult', firstHistoryResult)
 
     const messages = firstHistoryResult.messages
       .filter(message => message.message) // Оставляем только сообщения с текстом
-      .map(message => message.message); // Извлекаем текст сообщений
+      .map(message => {
+        console.log('message')
+        console.log('findSolanaAddresses(message)', findSolanaAddresses(message.message))
+        return {
+          addresses: findSolanaAddresses(message.message),
+          message: message.message,
+        }
+      }); // Извлекаем текст сообщений
 
     console.log('Текстовые сообщения из канала:', messages);
     // console.log('Первая часть истории:', firstHistoryResult);
@@ -95,14 +103,15 @@ async function main() {
     console.log('Авторизация...');
     await auth();
 
-    console.log('Получение информации о канале FILANTROP_GAMBLE...');
-    await getChannelByUsername('FILANTROP_GAMBLE');
+    // console.log('Получение информации о канале spydefi...');
+    // await getChannelByUsername('spydefi');
+    //
+    // console.log('Получение списка чатов...');
+    // await getChats();
+    //
+    // console.log('Получение сообщений из канала callsMadApes...');
+    // await getMessagesFromChannel(callsMadApes);
 
-    console.log('Получение списка чатов...');
-    await getChats();
-
-    console.log('Получение сообщений из канала callsMadApes...');
-    await getMessagesFromChannel(callsMadApes);
   } catch (error) {
     console.error('Ошибка выполнения программы:', error);
   }
