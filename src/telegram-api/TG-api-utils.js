@@ -37,7 +37,7 @@ async function getChats() {
 }
 
 // Функция для получения сообщений из канала
-async function getMessagesFromChannel(channelData, messagesCount) {
+async function getMessagesFromTGChannel(channelData, messagesCount) {
   try {
     const inputPeer = {
       _: 'inputPeerChannel',
@@ -56,10 +56,15 @@ async function getMessagesFromChannel(channelData, messagesCount) {
 
     const messages = firstHistoryResult.messages
       .filter(message => message.message) // Оставляем только сообщения с текстом
-      .map(message => message.message); // Извлекаем текст сообщений
-
-    console.log('Текстовые сообщения из канала:', messages);
-    // console.log('Первая часть истории:', firstHistoryResult);
+      .map(message => {
+        return {
+          message: message.message,
+          from_id: message.from_id,
+          peer_id: message.peer_id,
+          reply_to: message?.reply_to,
+          replies: message?.replies
+        }
+      }); // Извлекаем текст сообщений
 
     const historyCount = firstHistoryResult.count;
 
@@ -79,14 +84,16 @@ async function getMessagesFromChannel(channelData, messagesCount) {
     // Если хотите сохранить в файл, раскомментируйте следующую строку
     // fs.writeFileSync('messages.json', JSON.stringify(allMessages));
 
-    return allMessages;
+    // return allMessages;
+    return messages;
   } catch (error) {
     console.error('Ошибка получения сообщений из канала:', error);
   }
 }
 
+
 module.exports = {
   getChannelByUsername,
   getChats,
-  getMessagesFromChannel
+  getMessagesFromTGChannel
 };
