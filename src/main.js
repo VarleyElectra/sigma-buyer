@@ -5,11 +5,11 @@ const config = require("./telegram-api/config"); // Ваша функция дл
 const {api_id: apiId, api_hash: apiHash, phone, code, password} = config;
 const readline = require('readline');
 const {spyDefi, winterArcticAlpha, callsMadApes, winterArcAlphaDegenIndicatorID, winterArcPrivateChannelID,
-  alexStyleGamble, shitDegensChannelID, shitDegensChannel, shitDegenIndicatorID
+  alexStyleGamble, shitDegensChannelID, shitDegensChannel, shitDegenIndicatorID, DAOInsidersChatID, DAOInsidersChannel
 } = require("./telegram-api/channelsData");
 const {getMessagesFromTGChannel} = require("./telegram-api/TG-api-utils");
 
-const session = new StringSession("1AgAOMTQ5LjE1NC4xNjcuNDEBuy7UqqK+Bp9BcUCqt0DlJx3Hd8FYCZnZUvawyGQU8sV6uG57UqH40H/3XSBkD9NVNpTrCCW/wI4KW8o6vtidFy8+2xBAhGh5zHYeenoFH/tOpK26bviPLFgAj66KkJaUgjZHHXM8pYlhCLxrrR/Q0pCNhN+awaSpW5ulxI5t1ITnNrmM1mGf3Bm+N5Zl8pIEa9CvJKIHXzFnhWNer82j0TLFRJa5GbyO7GGtnTazRBqpe0L2kQn5CM2CmqZ17h1aXH3Rv4WHS1p94n6EIbaaQrRsq+9aws/WSi0cuIpIHDoSSdBmVgdaNSDhOcGfP+1ozv6CVq/6zpeRx91IO8LOaHo="); // Используется для хранения сессии
+const session = new StringSession("1AgAOMTQ5LjE1NC4xNjcuNTEBuymEj6t6kZ0DIW8/W4vL5YJMOOhlBkhrrF1Sz8bVrAQdQAi5QGr53Y2qUe1RUZUiwDomaw15S+IZscQyp5HdJTYyPzTUz8QWu6ZxsxNa6m8VWDHBv9DiBHUfYwoPRpC/3//CQloBdAZuftFq2bq6YGfTxxTYfGEPQdhRe9Q1oJk4vxpQGx4rymUu/bZp7BcIF82W5/5S2FlUBuqzMhv1p/RgON3JKH6J1DF2RvpYmU865JRbQR2lrwaGtQiA8RaQ/VtmDBFpU9tPBdcKv3C3rx2ml5HXzXZb/KP9ZOikP4N3FH9Euce6XPMYazFpARD5woYdq4eJ4Ru4jVv9yjhzW68="); // Используется для хранения сессии
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
@@ -17,6 +17,27 @@ const rl = readline.createInterface({
 
 const LIMIT_COUNT = 50;
 const BLOOM_SOLANA_BOT = "BloomSolana_bot";
+const TROJAN_SOLANA_BOT = "odysseus_trojanbot";
+const TRADEWIZ_SOLANA_BOT = "TradeWiz_Solbot";
+
+const signalStorage = {};
+const SIGNAL_TTL = 3600000; // 1 час в миллисекундах
+
+function storeSignal(signal) {
+  signalStorage[signal] = Date.now();
+}
+
+function checkSignal(signal) {
+  const storedTimestamp = signalStorage[signal];
+  if (storedTimestamp) {
+    const currentTime = Date.now();
+    if (currentTime - storedTimestamp < SIGNAL_TTL) {
+      return true; // Сигнал уже существует и не истёк
+    }
+  }
+  return false;
+}
+
 
 (async () => {
   const client = new TelegramClient(session, apiId, apiHash, {
@@ -221,7 +242,7 @@ const BLOOM_SOLANA_BOT = "BloomSolana_bot";
   }
 
   // Подписка на новые сообщения из канала
-  async function subscribeToUserInChat(channelId, userId) {
+  async function subscribeToUserInChat(channelId, userId, tradingBot) {
     client.addEventHandler(async (update) => {
 
       // if (update.className === 'UpdateNewChannelMessage'
@@ -246,8 +267,9 @@ const BLOOM_SOLANA_BOT = "BloomSolana_bot";
 
         const signal = extractSignal(message);
         console.log('signal', signal);
-        if (signal) {
-          await sendMessageInTG(BLOOM_SOLANA_BOT, signal);
+        if (signal && !checkSignal(signal)) {
+          storeSignal(signal);
+          await sendMessageInTG(tradingBot, signal);
         }
 
         // Здесь вы можете добавить дополнительную логику обработки сообщения
@@ -256,7 +278,7 @@ const BLOOM_SOLANA_BOT = "BloomSolana_bot";
   }
 
 // Подписка на новые сообщения из канала
-  async function subscribeToChannel(channelId) {
+  async function subscribeToChannel(channelId, tradingBot) {
     client.addEventHandler(async (update) => {
       const predicate = (
         update.className === 'UpdateNewChannelMessage'
@@ -267,8 +289,9 @@ const BLOOM_SOLANA_BOT = "BloomSolana_bot";
       if (predicate) {
         const message = update?.message?.message;
         const signal = extractSignal(message);
-        if (signal) {
-          await sendMessageInTG(BLOOM_SOLANA_BOT, signal);
+        if (signal && !checkSignal(signal)) {
+          storeSignal(signal);
+          await sendMessageInTG(tradingBot, signal);
         }
       }
     });
@@ -293,36 +316,44 @@ const BLOOM_SOLANA_BOT = "BloomSolana_bot";
 
   // const groupInfo = await client.invoke(
   //   new Api.channels.GetChannels({
-  //     id: [new Api.InputChannel({ channelId: shitDegensChannelID, accessHash: 0 })],
+  //     id: [new Api.InputChannel({ channelId: DAOInsidersChatID, accessHash: 0 })],
   //   })
   // );
   // console.log('groupInfo', groupInfo)
   // console.log('id', groupInfo?.chats[0].id)
   // console.log('accessHash', groupInfo?.chats[0].accessHash)
 
-  // const messages = await getMessagesFromTGChannel(shitDegensChannel, 50);
+  // const messages = await getMessagesFromTGChannel(DAOInsidersChannel, 50);
 
-  // const result = await client.invoke(
-  //   new Api.messages.GetHistory({
-  //     peer: new Api.InputPeerChannel({
-  //       channelId: shitDegensChannel.id,
-  //       accessHash: shitDegensChannel.access_hash,
-  //     }),
-  //     limit: 50, // Количество сообщений
-  //     addOffset: 0,
-  //     maxId: 0,
-  //     minId: 0,
-  //     hash: 0,
-  //   })
-  // );
-  // const mapped = result.messages.map((message) => {
-  //   return {
-  //     message: message?.message,
-  //     channelId: message?.peerId?.channelId,
-  //     userId: message?.fromId?.userId,
-  //   }
-  // })
+  const result = await client.invoke(
+    new Api.messages.GetHistory({
+      peer: new Api.InputPeerChannel({
+        channelId: DAOInsidersChannel.id,
+        accessHash: DAOInsidersChannel.access_hash,
+      }),
+      limit: 50, // Количество сообщений
+      addOffset: 0,
+      maxId: 0,
+      minId: 0,
+      hash: 0,
+    })
+  );
+  // console.log('result', result)
+  const mapped = result.messages.map((message) => {
+    return {
+      message: message?.message,
+      channelId: message?.peerId?.channelId,
+      userId: message?.fromId?.userId,
+    }
+  })
   // console.log('mapped', mapped); // prints the result
+
+  const mappedChina = mapped.filter(obj => {
+    const str = obj.message;
+    return str.includes('6P2vnyjUnf88tdT3z5SKdvpnYnyUmRV3i84rRrCvpump')
+  })
+
+  console.log('mappedChina', mappedChina)
 
   // const botMessages = mapped.filter((message) => {
   //   return message?.channelId == (shitDegensChannelID);
@@ -347,12 +378,20 @@ const BLOOM_SOLANA_BOT = "BloomSolana_bot";
   //
   // console.log('botMessages', botMessages)
 
-  console.log(`Подписываемся на новые сообщения из канала по channelId:`);
-  await subscribeToUserInChat(winterArcPrivateChannelID, winterArcAlphaDegenIndicatorID);
 
-  await subscribeToUserInChat(shitDegensChannelID, shitDegenIndicatorID);
+  // await subscribeToUserInChat(winterArcPrivateChannelID, winterArcAlphaDegenIndicatorID);
+  // await subscribeToUserInChat(shitDegensChannelID, shitDegenIndicatorID, TROJAN_SOLANA_BOT);
   // await getChannelInfo(client, alexStyleGamble.id, alexStyleGamble.access_hash);
+  await subscribeToChannel(callsMadApes.id, TROJAN_SOLANA_BOT);
+  await subscribeToChannel(DAOInsidersChannel.id, BLOOM_SOLANA_BOT);
 
-  console.log(`Подписываемся на новые сообщения из канала по channelId:`);
-  await subscribeToChannel(callsMadApes.id);
+  setInterval(() => {
+    const currentTime = Date.now();
+    Object.keys(signalStorage).forEach(signal => {
+      if (currentTime - signalStorage[signal] > SIGNAL_TTL) {
+        delete signalStorage[signal];
+      }
+    });
+  }, 60000); // Проверять каждую минуту
+
 })();
