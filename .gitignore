@@ -2,5 +2,4 @@ node_modules/
 dist/
 src/telegram-api/config.js
 src/telegram-api/data/1.json
-src/telegram-api/channelsData.js
 .idea/

@@ -9,7 +9,7 @@ const {spyDefi, winterArcticAlpha, callsMadApes, winterArcAlphaDegenIndicatorID,
 } = require("./telegram-api/channelsData");
 const {getMessagesFromTGChannel} = require("./telegram-api/TG-api-utils");
 
-const session = new StringSession("1AgAOMTQ5LjE1NC4xNjcuNTEBuymEj6t6kZ0DIW8/W4vL5YJMOOhlBkhrrF1Sz8bVrAQdQAi5QGr53Y2qUe1RUZUiwDomaw15S+IZscQyp5HdJTYyPzTUz8QWu6ZxsxNa6m8VWDHBv9DiBHUfYwoPRpC/3//CQloBdAZuftFq2bq6YGfTxxTYfGEPQdhRe9Q1oJk4vxpQGx4rymUu/bZp7BcIF82W5/5S2FlUBuqzMhv1p/RgON3JKH6J1DF2RvpYmU865JRbQR2lrwaGtQiA8RaQ/VtmDBFpU9tPBdcKv3C3rx2ml5HXzXZb/KP9ZOikP4N3FH9Euce6XPMYazFpARD5woYdq4eJ4Ru4jVv9yjhzW68="); // Используется для хранения сессии
+const session = new StringSession("1AgAOMTQ5LjE1NC4xNjcuNTEBu0aSea6AM1+PhzW5vW45XPyJe57GHEH43VoJw5oFbASCprQ2g4yu5DQNHhhsFpHolON9ZBoRSvyfYigw4TVqG4oxcTQG6KFcnV98OxAZASbOIK8WvOe6tOgQFYaomsoNKCuM8hKTAbPrxsjymbREWFUCPJaZfR50gM/+20UEdJ6j+/c+VrqIodLExCeQjPiGQBlGA+hnIk0NRM9Quw6c7Lwb7c9etr5Esta3K4H8IH/OyPqfSwroDT21LjUl2K/MXnuFCmk0mzBgkrSAYuy6NQGm3vwDZoMpf6SE2nXFiJw0OxTLExa1u10Ulh2h5SJwvFosRDWFZW/Bc/2Ag/w+f44="); // Используется для хранения сессии
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
@@ -73,6 +73,127 @@ function checkSignal(signal) {
   console.log('me', me)
 
   // <-------------------------FUNCTIONS------------------------------>
+  async function getMessagesFromChatByIDAndHash(channelId, accessHash, totalLimit = 300) {
+    let allMessages = [];
+    let offsetId = 0; // Смещение для пагинации
+
+    while (allMessages.length < totalLimit) {
+      const limit = Math.min(100, totalLimit - allMessages.length); // Максимум 100 сообщений за запрос
+
+      // Получаем сообщения с текущим смещением
+      const messages = await client.invoke(
+        new Api.messages.GetHistory({
+          peer: new Api.InputPeerUser({
+            userId: BigInt(channelId),
+            accessHash: BigInt(accessHash),
+          }),
+          limit,
+          offsetId,
+        })
+      );
+
+      // Если больше нет сообщений, выходим из цикла
+      if (!messages.messages.length) break;
+
+      // Добавляем сообщения в общий массив
+      allMessages = allMessages.concat(
+        messages.messages.map(msg => ({
+          message: msg.message,
+          date: msg.date,
+          id: msg.id,
+        }))
+      );
+
+      // Обновляем смещение для следующего запроса
+      offsetId = messages.messages[messages.messages.length - 1].id;
+    }
+
+    return allMessages;
+  }
+
+  async function getLastMessagesFromChat(client, username, totalLimit = 300) {
+    try {
+      const info = await client.invoke(
+        new Api.contacts.ResolveUsername({
+          username: username,
+        })
+      );
+
+      const user = info.users.find(user => user.username === username);
+      if (!user) {
+        throw new Error(`Пользователь с username ${username} не найден.`);
+      }
+
+      let allMessages = [];
+      let offsetId = 0; // Смещение для пагинации
+
+      console.log(`Получаем последние ${totalLimit} сообщений от ${username}...`);
+
+      while (allMessages.length < totalLimit) {
+        const limit = Math.min(100, totalLimit - allMessages.length); // Максимум 100 сообщений за запрос
+
+        console.log('typeof user.id', typeof user.id)
+        console.log('typeof user.accessHash', typeof user.accessHash)
+        // Получаем сообщения с текущим смещением
+        const messages = await client.invoke(
+          new Api.messages.GetHistory({
+            peer: new Api.InputPeerUser({
+              userId: user.id,
+              accessHash: user.accessHash,
+            }),
+            limit,
+            offsetId,
+          })
+        );
+
+        // Если больше нет сообщений, выходим из цикла
+        if (!messages.messages.length) break;
+
+        // Добавляем сообщения в общий массив
+        allMessages = allMessages.concat(
+          messages.messages.map(msg => ({
+            message: msg.message,
+            date: msg.date,
+            id: msg.id,
+          }))
+        );
+
+        // Обновляем смещение для следующего запроса
+        offsetId = messages.messages[messages.messages.length - 1].id;
+      }
+
+      console.log(`Найдено ${allMessages.length} сообщений от бота.`);
+
+      return allMessages;
+    } catch (error) {
+      console.error(`Ошибка получения сообщений от бота ${username}:`, error);
+      return null;
+    }
+  }
+
+  async function filterLiquidityCalls() { // TODO: сделать универсальнее
+    const messages = await getLastMessagesFromChat(client, BLOOM_SOLANA_BOT, 325);
+
+    // Фильтруем сообщения по Liquidity
+    const filteredMessages = messages.filter(msg => {
+      const liquidityMatch = msg.message.match(/Liquidity: \$([\d\.]+)([KM]?)/);
+      if (liquidityMatch) {
+        const value = parseFloat(liquidityMatch[1]);
+        const unit = liquidityMatch[2];
+
+        // Преобразуем значение в тысячи, если указано K, или миллионы, если M
+        const liquidityValue = unit === 'M' ? value * 1000 : value;
+        return liquidityValue > 120 || unit === 'M';
+      }
+      return false;
+    });
+    const mappedMessages = filteredMessages.map(msg => {
+      return {
+        signal: extractSignal(msg.message),
+        id: msg.id,
+      }
+    })
+  }
 
   async function getSubscribedGroups(client) {
     try {
@@ -244,19 +365,6 @@ function checkSignal(signal) {
   // Подписка на новые сообщения из канала
   async function subscribeToUserInChat(channelId, userId, tradingBot) {
     client.addEventHandler(async (update) => {
-
-      // if (update.className === 'UpdateNewChannelMessage'
-      //   && update?.message?.peerId?.channelId?.value == BigInt(channelId)) {
-      //   console.log('update', update)
-      //   console.log('update message', update?.message?.message)
-      //   console.log('<!!!!!!!!!!!!!!!!!!!!!!!!!!!!>')
-      //   console.log('channelId', update?.message?.peerId?.channelId?.value)
-      //   console.log('userId', update?.message?.fromId?.userId?.value)
-      //   console.log('update?.message?.peerId?.channelId?.value == BigInt(channelId)', update?.message?.peerId?.channelId?.value == BigInt(channelId))
-      //   console.log('<--------------------------------------->')
-      //   console.log('\n')
-      // }
-
       if (
         update.className === 'UpdateNewChannelMessage'
         && update?.message?.peerId?.channelId?.value == BigInt(channelId)
@@ -298,33 +406,7 @@ function checkSignal(signal) {
   }
 
   // Основная логика
-  // const channels = await getChats();
-
-  // Получение инфы о канале
-  const targetChannel = await getChannelByUsername('Alexstyle_gamble');
-  const channelId = targetChannel.chats[0]?.id; // Убедитесь, что используете правильное поле
-  if (!channelId) {
-    console.error("Не удалось получить ID канала.");
-    return;
-  }
-
-  // await getMessagesFromChannel(targetChannel);
-
-  // const res = await getGroupAndTopics(client, '@degenjournal alpha 🦈')
-  // const groups = getSubscribedGroups(client);
-  // console.log('groups', groups)
-
-  // const groupInfo = await client.invoke(
-  //   new Api.channels.GetChannels({
-  //     id: [new Api.InputChannel({ channelId: DAOInsidersChatID, accessHash: 0 })],
-  //   })
-  // );
-  // console.log('groupInfo', groupInfo)
-  // console.log('id', groupInfo?.chats[0].id)
-  // console.log('accessHash', groupInfo?.chats[0].accessHash)
-
-  // const messages = await getMessagesFromTGChannel(DAOInsidersChannel, 50);
-
+  // сканирование сообщений по Id и access_hash
   const result = await client.invoke(
     new Api.messages.GetHistory({
       peer: new Api.InputPeerChannel({
@@ -338,53 +420,34 @@ function checkSignal(signal) {
       hash: 0,
     })
   );
+  // const result = await
+  // getMessagesFromChatByIDAndHash(DAOInsidersChannel.id, DAOInsidersChannel.access_hash, 20) //TODO: ебанутая хуйня тупая шлюхая не работающая
   // console.log('result', result)
-  const mapped = result.messages.map((message) => {
-    return {
-      message: message?.message,
-      channelId: message?.peerId?.channelId,
-      userId: message?.fromId?.userId,
-    }
-  })
-  // console.log('mapped', mapped); // prints the result
-
-  const mappedChina = mapped.filter(obj => {
-    const str = obj.message;
-    return str.includes('6P2vnyjUnf88tdT3z5SKdvpnYnyUmRV3i84rRrCvpump')
-  })
-
-  console.log('mappedChina', mappedChina)
-
-  // const botMessages = mapped.filter((message) => {
-  //   return message?.channelId == (shitDegensChannelID);
-  // }).map(message => {
+  // const mapped = result.messages.map((message) => {
   //   return {
   //     message: message?.message,
-  //     signal: extractSignal(message?.message),
-  //     userId: message?.userId,
+  //     channelId: message?.peerId?.channelId,
+  //     userId: message?.fromId?.userId,
   //   }
   // })
-  //
-  // console.log('botMessages', botMessages)
-
-  // const botMessages = messages.filter((message) => {
-  //   return message?.from_id?.user_id === winterArcAlphaDegenIndicatorID;
-  // }).map(message => {
-  //   return {
-  //     message: message.message,
-  //     signal: extractSignal(message.message)
-  //   }
+  // console.log('mapped', mapped); // prints the result
+  // const mappedChina = mapped.filter(obj => {
+  //   const str = obj.message;
+  //   return str.includes('6P2vnyjUnf88tdT3z5SKdvpnYnyUmRV3i84rRrCvpump')
   // })
   //
-  // console.log('botMessages', botMessages)
+  // console.log('mappedChina', mappedChina)
 
+  /
 
   // await subscribeToUserInChat(winterArcPrivateChannelID, winterArcAlphaDegenIndicatorID);
   // await subscribeToUserInChat(shitDegensChannelID, shitDegenIndicatorID, TROJAN_SOLANA_BOT);
   // await getChannelInfo(client, alexStyleGamble.id, alexStyleGamble.access_hash);
-  await subscribeToChannel(callsMadApes.id, TROJAN_SOLANA_BOT);
-  await subscribeToChannel(DAOInsidersChannel.id, BLOOM_SOLANA_BOT);
+  // await subscribeToChannel(callsMadApes.id, TROJAN_SOLANA_BOT);
+  // await subscribeToChannel(DAOInsidersChannel.id, BLOOM_SOLANA_BOT);
 
+
+  // хранение и очистка коллов (против дублирования покупок или коллов)
   setInterval(() => {
     const currentTime = Date.now();
     Object.keys(signalStorage).forEach(signal => {
