@@ -25,6 +25,21 @@ function extractSignal(text) {
   return '';
 }
 
+function formatCurrentDateTime(locale = 'en-US', options = {}) {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    timeZoneName: 'short',
+    ...options // Дополнительные опции
+  });
+  return formatter.format(now);
+}
+
 const text = 'Prelaunch (🔥ETH) Russian Pepe\n' +
   'Gambles Channel🎲\n' +
   '\n' +
@@ -42,4 +57,4 @@ const addresses = text.match(regex);
 console.log('addresses', addresses)
 
 
-module.exports = { extractSignal };
+module.exports = { extractSignal, formatCurrentDateTime };

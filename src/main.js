@@ -1,11 +1,12 @@
 const { TelegramClient, Api} = require("telegram");
 const { StringSession } = require("telegram/sessions");
-const { extractSignal } = require("./utils");
+const { extractSignal, formatCurrentDateTime} = require("./utils");
 const config = require("./telegram-api/config"); // Ваша функция для поиска адресов Solana
 const {api_id: apiId, api_hash: apiHash, phone, code, password} = config;
 const readline = require('readline');
 const {spyDefi, winterArcticAlpha, callsMadApes, winterArcAlphaDegenIndicatorID, winterArcPrivateChannelID,
-  alexStyleGamble, shitDegensChannelID, shitDegensChannel, shitDegenIndicatorID, DAOInsidersChatID, DAOInsidersChannel
+  alexStyleGamble, shitDegensChannelID, shitDegensChannel, shitDegenIndicatorID, DAOInsidersChatID, DAOInsidersChannel,
+  shitDegensAlphaID
 } = require("./telegram-api/channelsData");
 const {getMessagesFromTGChannel} = require("./telegram-api/TG-api-utils");
 
@@ -371,11 +372,10 @@ function checkSignal(signal) {
         && update?.message?.fromId?.userId?.value == BigInt(userId)
       ) {
         const message = update?.message?.message;
-        console.log(`Новое сообщение в канале: ${message}`);
 
         const signal = extractSignal(message);
-        console.log('signal', signal);
         if (signal && !checkSignal(signal)) {
+          console.log(`signal: ${signal}; current time: ${formatCurrentDateTime()}`);
           storeSignal(signal);
           await sendMessageInTG(tradingBot, signal);
         }
@@ -389,15 +389,17 @@ function checkSignal(signal) {
   async function subscribeToChannel(channelId, tradingBot) {
     client.addEventHandler(async (update) => {
       const predicate = (
-        update.className === 'UpdateNewChannelMessage'
+          update.className === 'UpdateNewChannelMessage'
           || update.className === 'UpdateEditChannelMessage'
         )
         && update?.message?.peerId?.channelId?.value == BigInt(channelId)
+        && update?.message?.fromId?.userId?.value === undefined
 
       if (predicate) {
         const message = update?.message?.message;
         const signal = extractSignal(message);
         if (signal && !checkSignal(signal)) {
+          console.log(`signal: ${signal}; current time: ${formatCurrentDateTime()}`);
           storeSignal(signal);
           await sendMessageInTG(tradingBot, signal);
         }
@@ -407,19 +409,19 @@ function checkSignal(signal) {
 
   // Основная логика
   // сканирование сообщений по Id и access_hash
-  const result = await client.invoke(
-    new Api.messages.GetHistory({
-      peer: new Api.InputPeerChannel({
-        channelId: DAOInsidersChannel.id,
-        accessHash: DAOInsidersChannel.access_hash,
-      }),
-      limit: 50, // Количество сообщений
-      addOffset: 0,
-      maxId: 0,
-      minId: 0,
-      hash: 0,
-    })
-  );
+  // const result = await client.invoke(
+  //   new Api.messages.GetHistory({
+  //     peer: new Api.InputPeerChannel({
+  //       channelId: winterArcticAlpha.id,
+  //       accessHash: winterArcticAlpha.access_hash,
+  //     }),
+  //     limit: 50, // Количество сообщений
+  //     addOffset: 0,
+  //     maxId: 0,
+  //     minId: 0,
+  //     hash: 0,
+  //   })
+  // );
   // const result = await
   // getMessagesFromChatByIDAndHash(DAOInsidersChannel.id, DAOInsidersChannel.access_hash, 20) //TODO: ебанутая хуйня тупая шлюхая не работающая
   // console.log('result', result)
@@ -438,13 +440,13 @@ function checkSignal(signal) {
   //
   // console.log('mappedChina', mappedChina)
 
-  /
-
   // await subscribeToUserInChat(winterArcPrivateChannelID, winterArcAlphaDegenIndicatorID);
-  // await subscribeToUserInChat(shitDegensChannelID, shitDegenIndicatorID, TROJAN_SOLANA_BOT);
+  // await subscribeToUserInChat(winterArcPrivateChannelID, shitDegensAlphaID, TRADEWIZ_SOLANA_BOT);
   // await getChannelInfo(client, alexStyleGamble.id, alexStyleGamble.access_hash);
-  // await subscribeToChannel(callsMadApes.id, TROJAN_SOLANA_BOT);
-  // await subscribeToChannel(DAOInsidersChannel.id, BLOOM_SOLANA_BOT);
+
+  await subscribeToChannel(winterArcPrivateChannelID, TRADEWIZ_SOLANA_BOT);
+  await subscribeToChannel(callsMadApes.id, TROJAN_SOLANA_BOT);
+  await subscribeToChannel(DAOInsidersChannel.id, BLOOM_SOLANA_BOT);
 
 
   // хранение и очистка коллов (против дублирования покупок или коллов)
