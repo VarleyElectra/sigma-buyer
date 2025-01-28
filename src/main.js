@@ -74,6 +74,177 @@ function checkSignal(signal) {
   console.log('me', me)
 
   // <-------------------------FUNCTIONS------------------------------>
+  async function interactWithBot(client, botUsername, steps, signal) {
+    // Поиск кнопки по тексту
+    const findButton = (rows, buttonText) => {
+      for (const row of rows) {
+        const button = row.buttons.find((btn) => btn.text.includes(buttonText));
+        if (button) return button;
+      }
+      return null;
+    }
+    const botInfo = await client.invoke(new Api.contacts.ResolveUsername({
+      username: botUsername,
+    }));
+    const botId = botInfo.users[0].id;
+    let lastMessage = null;
+    let promise = null;
+
+    // client.addEventHandler(async (update) => {
+    //   if (update.className === "UpdateNewMessage" && update.message.peerId.userId?.value == BigInt(botId)) {
+    //     lastMessage = update.message;
+    //     console.log("Ответ от бота:", update.message);
+    //   }
+    // });
+
+    for (const step of steps) {
+      console.log(`Executing step: ${step.description}`);
+      if (step.isNeedToUpdateState) {
+        promise = waitForMessage(client, botId);
+      }
+      // Если step.message ожидается, отправляем сообщение
+      if (step.message) {
+        await client.invoke(
+          new Api.messages.SendMessage({
+            peer: botUsername,
+            message: step.message,
+          })
+        );
+        // lastMessage = await waitForMessage(client, botId);
+      }
+      if (step.signal) {
+        await client.invoke(
+          new Api.messages.SendMessage({
+            peer: botUsername,
+            message: signal,
+          })
+        );
+        // lastMessage = await waitForMessage(client, botId);
+      }
+      // console.log('lastMessage', lastMessage)
+      // if (!lastMessage.replyMarkup || !lastMessage.replyMarkup.rows) {
+      //   console.error("No buttons found in the response.");
+      //   break;
+      // }
+
+      // Находим кнопку по тексту или другим условиям
+      if (step.buttonText) {
+        const button = findButton(lastMessage?.replyMarkup?.rows, step.buttonText);
+        console.log('button', button)
+        if (!button) {
+          console.error(`Button "${step.buttonText}" not found.`);
+          break;
+        }
+
+        // Нажимаем на кнопку
+        // lastMessage = await client.invoke(new Api.messages.GetBotCallbackAnswer({
+        //   peer: botId,
+        //   msgId: response.id,
+        //   data: button.data,
+        // }));
+        await client.invoke(new Api.messages.GetBotCallbackAnswer({
+          peer: botId,
+          msgId: lastMessage?.id,
+          data: button.data,
+        }));
+        // lastMessage = await waitForMessage(client, botId);
+        console.log(`Clicked button: ${step.buttonText}`);
+      }
+      if (step.isNeedToUpdateState) {
+        lastMessage = await promise;
+      }
+    }
+
+    console.log("Interaction complete.");
+  }
+
+// Функция ожидания нового сообщения
+  async function waitForMessage(client, botId, timeout = 10000) {
+    return new Promise((resolve, reject) => {
+      const handler = async (update) => {
+        if (update.className === "UpdateNewMessage" && update.message.peerId.userId?.value == BigInt(botId)) {
+          resolve(update.message);
+        }
+      };
+
+      client.addEventHandler(handler)
+
+      // setTimeout(() => {
+      //   // client.removeEventHandler('update', handler);
+      //   reject(new Error("Timeout waiting for message."));
+      // }, timeout);
+    });
+  }
+
+  async function interactWithBot1(botUsername, signal) {
+    // Получение информации о боте
+    const botInfo = await client.invoke(new Api.contacts.ResolveUsername({
+      username: botUsername,
+    }));
+    const botId = botInfo.users[0].id;
+    console.log('botInfo', botInfo);
+
+    // Отправка команды /start для начала взаимодействия
+    await client.invoke(
+      new Api.messages.SendMessage({
+        peer: botUsername,
+        message: "/sniper",
+      })
+    );
+
+    // Состояние взаимодействия
+    const botStates = {};
+
+    client.addEventHandler(async (update) => {
+      if (update.className === "UpdateNewMessage" && update.message.peerId.userId?.value == BigInt(botId)) {
+        const message = update.message;
+        console.log("Ответ от бота:", message.message);
+
+        if (message.replyMarkup) {
+          if (message.replyMarkup.rows) {
+            // Inline-клавиатура
+            const buttons = message.replyMarkup.rows.flatMap(row => row.buttons);
+            console.log('buttons', buttons)
+
+            console.log("Кнопки доступны:", buttons.map((btn) => btn.text));
+            if (buttons.length > 0) {
+              const createTaskButton = buttons.find((btn) => btn.text.includes('Create Task'))
+              console.log('createTaskButton', createTaskButton)
+              // const firstButton = buttons[0];
+              await client.invoke(new Api.messages.GetBotCallbackAnswer({
+                peer: message.botId,
+                msgId: message.id,
+                data: createTaskButton.data,
+              }));
+              await client.invoke(
+                new Api.messages.SendMessage({
+                  peer: botUsername,
+                  message: signal,
+                })
+              );
+            } else {
+              console.error("No buttons in inline keyboard.");
+            }
+          } else {
+            console.error("ReplyMarkup exists, but no rows found.");
+          }
+        } else {
+          console.error("No ReplyMarkup in the message.");
+        }
+
+        // Логика для обработки текстовых сообщений
+        if (message.message.includes("Введите данные")) {
+          await client.invoke(
+            new Api.messages.SendMessage({
+              peer: botId,
+              message: "Мои данные", // Отправляем требуемые данные
+            })
+          );
+        }
+      }
+    });
+  }
+
   async function getMessagesFromChatByIDAndHash(channelId, accessHash, totalLimit = 300) {
     let allMessages = [];
     let offsetId = 0; // Смещение для пагинации
@@ -444,9 +615,21 @@ function checkSignal(signal) {
   // await subscribeToUserInChat(winterArcPrivateChannelID, shitDegensAlphaID, TRADEWIZ_SOLANA_BOT);
   // await getChannelInfo(client, alexStyleGamble.id, alexStyleGamble.access_hash);
 
-  await subscribeToChannel(winterArcPrivateChannelID, TRADEWIZ_SOLANA_BOT);
-  await subscribeToChannel(callsMadApes.id, TROJAN_SOLANA_BOT);
-  await subscribeToChannel(DAOInsidersChannel.id, BLOOM_SOLANA_BOT);
+  // await subscribeToChannel(winterArcPrivateChannelID, TRADEWIZ_SOLANA_BOT);
+  // await subscribeToChannel(callsMadApes.id, TROJAN_SOLANA_BOT);
+  // await subscribeToChannel(DAOInsidersChannel.id, BLOOM_SOLANA_BOT);
+
+
+  // Пример последовательности шагов
+  const steps = [
+    { description: "Step 1: Click start", message: "/sniper", isNeedToUpdateState: true, },
+    { description: "Step 2: Click button 'Create Task'", buttonText: "Create Task", isNeedToUpdateState: true, },
+    { description: "Step 3: Add contract", signal: true, isNeedToUpdateState: true, },
+    { description: "Step 4: Mode", buttonText: "Pro Mode", isNeedToUpdateState: false, },
+    // { description: "Step 5: Buy Amount", buttonText: "Buy Amount", isNeedToUpdateState: false, },
+    // { description: "Step 6: Mode", autoDeletedMessage: "0.1", isNeedToUpdateState: false, },
+  ];
+  await interactWithBot(client, BLOOM_SOLANA_BOT, steps, '59h8yt1MqZ57EZShpcdfqGgYgNWJYoi3M8EyPuRPpump');
 
 
   // хранение и очистка коллов (против дублирования покупок или коллов)
