@@ -51,7 +51,8 @@ const shitDegensChannelID = 2448679624;
 const shitDegensAlphaID = 5877155453;
 
 //2464976562n
-
+//SOlanaBloom  7497120111n
+// myId =  635459407n
 module.exports = {
   callsMadApes,
   callsFilantrop,

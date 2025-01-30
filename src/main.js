@@ -81,6 +81,7 @@ function checkSignal(signal) {
           username: username,
         })
       );
+      let attemptsCount = 0;
 
       const user = info.users.find(user => user.username === username);
       if (!user) {
@@ -88,16 +89,32 @@ function checkSignal(signal) {
       }
 
       // Получаем последнее сообщение
-      const messages = await client.invoke(
+      let messages = await client.invoke(
         new Api.messages.GetHistory({
           peer: new Api.InputPeerUser({
             userId: user.id,
             accessHash: user.accessHash,
           }),
-          limit: 1, // Получаем только одно последнее сообщение
+          limit: 1,
           offsetId: 0,
         })
       );
+
+      while (messages?.messages[0]?.fromId != null) {
+        if (attemptsCount > 50) return null;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        messages = await client.invoke(
+          new Api.messages.GetHistory({
+            peer: new Api.InputPeerUser({
+              userId: user.id,
+              accessHash: user.accessHash,
+            }),
+            limit: 1,
+            offsetId: 0,
+          })
+        );
+        attemptsCount += 1;
+      }
 
       if (messages.messages.length === 0) {
         console.log("Нет сообщений.");
@@ -112,7 +129,7 @@ function checkSignal(signal) {
     }
   }
 
-  async function interactWithBot(client, botUsername, steps, signal) {
+  async function interactWithBot2(client, botUsername) {
     const botInfo = await client.invoke(new Api.contacts.ResolveUsername({
       username: botUsername,
     }));
@@ -126,7 +143,7 @@ function checkSignal(signal) {
       }
     })
   }
-  async function interactWithBot2(client, botUsername, steps, signal) {
+  async function interactWithBot(client, botUsername, steps, signal) {
     // Поиск кнопки по тексту
     const findButton = (rows, buttonText) => {
       for (const row of rows) {
@@ -141,17 +158,18 @@ function checkSignal(signal) {
     const botId = botInfo.users[0].id;
     let actualMessage = null;
     let updatedMessage = null;
-    let resolveLoadedData;
-    new Promise((resolve) => {
-      resolveLoadedData = resolve;
-    });
-    client.addEventHandler(async (update) => {
-      if (update.className === "UpdateNewMessage" && update.message.peerId.userId?.value == BigInt(botId)) {
-        updatedMessage = update.message;
-        resolveLoadedData();
-        console.log('updatedMessage', updatedMessage)
-      }
-    })
+    let lastMessage = null;
+    // let resolveLoadedData;
+    // new Promise((resolve) => {
+    //   resolveLoadedData = resolve;
+    // });
+    // client.addEventHandler(async (update) => {
+    //   if (update.className === "UpdateNewMessage" && update.message.peerId.userId?.value == BigInt(botId)) {
+    //     updatedMessage = update.message;
+    //     // resolveLoadedData();
+    //     console.log('updatedMessage', updatedMessage)
+    //   }
+    // })
 
     // client.addEventHandler(async (update) => {
     //   if (update.className === "UpdateNewMessage" && update.message.peerId.userId?.value == BigInt(botId)) {
@@ -162,9 +180,9 @@ function checkSignal(signal) {
 
     for (const step of steps) {
       console.log(`Executing step: ${step.description}`);
-      // if (step.isNeedToUpdateState) {
-      //   promise = waitForMessage(client, botId);
-      // }
+      if (step.isNeedToGetLastMessage) {
+        lastMessage = await getLastMessageFromChat(client, botUsername);
+      }
       // Если step.message ожидается, отправляем сообщение
       if (step.message) {
         await client.invoke(
@@ -206,9 +224,6 @@ function checkSignal(signal) {
         }));
         // lastMessage = await waitForMessage(client, botId);
         console.log(`Clicked button: ${step.buttonText}`);
-      }
-      if (step.isNeedToUpdateState) {
-        lastMessage = await promise;
       }
     }
 
@@ -678,23 +693,26 @@ function checkSignal(signal) {
 
 
   // Снайпинг запуска с помощью Bloom Solana Bot
-  // {
-  //   const steps = [
-  //     { description: "Step 1: Click start", message: "/sniper", isNeedToUpdateState: true, },
-  //     { description: "Step 2: Click button 'Create Task'", buttonText: "Create Task", isNeedToUpdateState: false, },
-  //     { description: "Step 3: Add contract", signal: true, isNeedToUpdateState: true, },
-  //     { description: "Step 4: Mode", buttonText: "Pro Mode", isNeedToUpdateState: false, },
-  //     // { description: "Step 5: Buy Amount", buttonText: "Buy Amount", isNeedToUpdateState: false, },
-  //     // { description: "Step 6: Mode", autoDeletedMessage: "0.1", isNeedToUpdateState: false, },
-  //   ];
-  //   const update = await getLastMessageFromChat(client, BLOOM_SOLANA_BOT);
-  //   console.log('update', update)
-  //   console.log('update.message', update.message);
-  //   const buttons = update?.replyMarkup?.rows?.flatMap(row => row.buttons);
-  //
-  //   console.log("Кнопки доступны:", buttons?.map((btn) => btn.text));
-  //   // await interactWithBot(client, BLOOM_SOLANA_BOT, steps, '59h8yt1MqZ57EZShpcdfqGgYgNWJYoi3M8EyPuRPpump');
-  // }
+  {
+    const steps = [
+      { description: "Step 1: Click start", message: "/sniper", isNeedToGetLastMessage: false, },
+      { description: "Step 2: Click button 'Create Task'", buttonText: "Create Task", isNeedToGetLastMessage: true, },
+      { description: "Step 3: Add contract", signal: true, isNeedToGetLastMessage: false, },
+      { description: "Step 4: Mode", buttonText: "Pro Mode", isNeedToGetLastMessage: true, },
+      { description: "Step 5: Buy Amount", buttonText: "Buy Amount", isNeedToGetLastMessage: false, },
+      { description: "Step 6: Mode", message: "0.1", isNeedToGetLastMessage: true, },
+    ]; // TODO: добавить остальные пункты
+
+
+    // const update = await getLastMessageFromChat(client, BLOOM_SOLANA_BOT);
+    // console.log('update', update)
+    // console.log('update.message', update.message);
+    // const buttons = update?.replyMarkup?.rows?.flatMap(row => row.buttons);
+    // console.log("Кнопки доступны:", buttons?.map((btn) => btn.text));
+
+
+    await interactWithBot(client, BLOOM_SOLANA_BOT, steps, '59h8yt1MqZ57EZShpcdfqGgYgNWJYoi3M8EyPuRPpump');
+  }
 
 
   // хранение и очистка коллов (против дублирования покупок или коллов)
